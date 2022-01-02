@@ -37,7 +37,8 @@ function WSMount.RefreshContent(wsid, cont)
 	for _, fn in ipairs(cont) do
 		if not fn:match("%.vtf$") and
 			not fn:match("%.png$") and
-			not fn:match("%.jpg$") then
+			not fn:match("%.jpg$") and
+			not fn:match("%.vmt$") then
 			continue
 		end
 
@@ -54,9 +55,15 @@ function WSMount.RefreshContent(wsid, cont)
 			-- a material using this texture was attempted to be loaded before mount
 			-- add an override for any lua material-setting function so it'd use this
 			-- new material we just created instead of the old erroring one
+
 			local newMat = Material(usePath)
+			if not newMat or newMat:IsError() then
+				print("failed to create:", usePath, newMat)
+				continue
+			end -- ?
 
 			for _, mat in ipairs(missingMats) do
+				WSMount.MaterialMerge(mat, newMat) -- questionable practice
 				WSMount.SwapMaterials[mat] = newMat
 			end
 		end

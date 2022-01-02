@@ -27,6 +27,15 @@ function WSMount.Reset()
 	timer.Remove("WSM_Flush")
 end
 
+--[[
+-- debug
+
+function WSMount.Resync()
+	WSMount.Reset()
+	include("wsmount/client/cl_networking.lua")
+end
+]]
+
 local root = "wsmount/"
 
 local function recInc(sub, cl, sv, recurse)
