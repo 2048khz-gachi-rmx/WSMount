@@ -58,13 +58,18 @@ function WSMount.RefreshContent(wsid, cont)
 
 			local newMat = Material(usePath)
 			if not newMat or newMat:IsError() then
-				print("failed to create:", usePath, newMat)
+				WSMount.LogError("Failed to create a mounted material!? Tried path: %s", usePath)
 				continue
-			end -- ?
+			end
 
 			for _, mat in ipairs(missingMats) do
-				WSMount.MaterialMerge(mat, newMat) -- questionable practice
-				WSMount.SwapMaterials[mat] = newMat
+				local errMat, flags = mat[1], mat[2]
+				local useMat = newMat
+				if flags and flags ~= "" then
+					useMat = Material(usePath, flags) -- have to make a new mat with desired flags
+				end
+				WSMount.MaterialMerge(errMat, useMat) -- questionable practice
+				WSMount.SwapMaterials[errMat] = useMat
 			end
 		end
 
@@ -78,8 +83,13 @@ end
 function WSMount.RefreshAll()
 	-- after everything has been mounted
 
+	WSMount.Log("Reloading models...")
 	RunConsoleCommand("r_flushlod") -- reload all models
+
+	WSMount.Log("Restarting sound...")
 	RunConsoleCommand("snd_restart") -- sounds
+
+	hook.Run("WSMount_MountedPack", wsid, cont)
 	-- ??
 end
 
@@ -110,76 +120,122 @@ function WSMount.DrawMountingOverlay()
 end
 
 local function doMount()
+	if table.IsEmpty(WSMount.MountQueue) then return end -- u w0t
+
 	local preMcore = GetConVar("gmod_mcore_test"):GetInt()
 	local preQueue = GetConVar("mat_queue_mode"):GetInt()
 
+	RunConsoleCommand("gmod_mcore_test", 0)
+	RunConsoleCommand("mat_queue_mode", 0)
+
 	-- trip up anticheats 5head
 	local frames = 0
+	local refreshing = false
 
 	hook.Add("PreRender", "WSMount_AvoidCrashHack", function()
 		frames = frames + 1
-		if frames < 2 then
+		if frames < 5 then -- first few frames, disallow rendering anything but don't mount
 			WSMount.DrawMountingOverlay()
 			return true
 		end
 
+		-- after N frames are prevented, start mounting crap
+
 		for k,v in pairs(WSMount.MountQueue) do
+			WSMount.Log("Mounting addon '%s' (@ %s)...", k, v)
 			local ok, contents = game.MountGMA(v)
+
+			if not ok then
+				WSMount.LogError("	Mount unsuccessful! No clue why.") -- gmod isn't very helpful
+			end
 
 			WSMount.Mounted[k] = contents
 			WSMount.MountQueue[k] = nil
 		end
 
-		hook.Remove("PreRender", "WSMount_AvoidCrashHack")
-		hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
+		if not refreshing and table.IsEmpty(WSMount.DLQueue) and table.IsEmpty(WSMount.MountQueue) then
+			refreshing = true
 
-		if table.IsEmpty(WSMount.DLQueue) and table.IsEmpty(WSMount.MountQueue) then
 			timer.Simple(0, function()
+				-- do it outside of a rendering context, just in case lol
+				WSMount.Log("Queue empty; reloading all materials!")
+				local amtMounted = 0
 				for wsid, cont in pairs(WSMount.Mounted) do
 					if not cont.Reloaded then
 						WSMount.RefreshContent(wsid, cont)
 						cont.Reloaded = true
+						amtMounted = amtMounted + 1
 					end
 				end
 
 				WSMount.RefreshAll()
 
-				-- ACK
-				timer.Simple(0.5, function()
+				-- after everything is mounted and refreshed, give it a little more time then restore everything
+				timer.Simple(0.25, function()
 					RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
 					RunConsoleCommand("mat_queue_mode", tostring(preQueue))
+
+					hook.Remove("PreRender", "WSMount_AvoidCrashHack")
+					hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
+
+					WSMount.Say("Mounted %d addons!", amtMounted)
 				end)
 			end)
 		end
 
-		if frames < 4 then
-			WSMount.DrawMountingOverlay()
-			return true
-		end
+		WSMount.DrawMountingOverlay()
+		return true
 	end)
 end
 
 local function reqMount()
-	if timer.Exists("WSMount_Delay") then return end
+	--if timer.Exists("WSMount_Delay") then return end
 
 	hook.Add("RenderScreenspaceEffects", "WSMount_Fill", function()
 		-- will only run when allowed to render (ie, not returning true from PrePrender)
 		render.UpdateScreenEffectTexture()
 	end)
 
-	timer.Create("mount_delay", 1, 1, doMount)
+	timer.Create("mount_delay", 1.5, 1, doMount)
 end
 
+WSMount.GotAddons = WSMount.GotAddons or 0
+
+-- going above 50 megs of addons awaiting mount will request mount
+local MountSizeCap = 50 * 1024 * 1024
+
 function WSMount.BeginMount()
+	WSMount.Say("Beginning download of %d addons...", #WSMount.GetAddons())
+
+	local awaitingMountSz = 0
+
 	for k,v in ipairs(WSMount.GetAddons()) do
 		if WSMount.Mounted[v] or WSMount.DLQueue[v] then continue end
 
 		WSMount.DLQueue[v] = true
 		steamworks.DownloadUGC(v, function(path, fobj)
+			WSMount.GotAddons = WSMount.GotAddons + 1
+			awaitingMountSz = awaitingMountSz + fobj:Size()
+
+			local total = #WSMount.GetAddons()
+			local left = total - WSMount.GotAddons
+
 			WSMount.MountQueue[v] = path
 			WSMount.AssociatePath(v, path)
 			WSMount.DLQueue[v] = nil
-			reqMount()
+
+			if left > 5 and left % 5 == 0
+			or left <= 5 then
+
+				WSMount.Say("%d/%d addons downloaded...",
+					WSMount.GotAddons, total)
+			end
+
+			if left % 5 == 0 or awaitingMountSz > MountSizeCap then
+				-- mount in batches of 5 addons or some random size i picked, lol
+				reqMount()
+				awaitingMountSz = 0
+			end
 		end)
 	end
 end

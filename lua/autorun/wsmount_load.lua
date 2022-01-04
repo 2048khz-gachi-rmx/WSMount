@@ -10,6 +10,8 @@ function WSMount.Reset()
 
 	-- do not reset caught addons serverside (cause we cant catch them anymore)
 	if CLIENT then
+		WSMount.GotAddons = 0
+
 		table.Empty(WSMount.CaughtAddons)
 		table.Empty(WSMount.Mounted)
 		table.Empty(WSMount.MountQueue)
@@ -80,3 +82,4 @@ WSMount.IncludeFolder = recInc
 recInc("", true, true, false) -- everything in root is shared
 recInc("server", false, true)
 recInc("client", true, false)
+recInc("detours", SERVER, false) -- basically only AddCSLua the stuff; it'll be included in preboot
