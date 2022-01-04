@@ -24,6 +24,7 @@ end
 --]==================================]
 if SERVER then
 	include("sh_storage.lua")
+	include("sh_core.lua")
 
 	local addons = WSMount.Storage.LoadInitial(true)
 	addons = addons and addons.Addons or {}
@@ -48,8 +49,7 @@ if SERVER then
 		-- are supposed to be mounted live
 		if table.HasValue(addons, wsid) then
 			-- also tell the admins about it
-			print("[WSMount] Preventing resource.AddWorkshop: " .. (wsid or "[what]") ..
-				" (will be mounted live)")
+			WSMount.Log("Preventing resource.AddWorkshop: %s (will be mounted live)", wsid or "[wtf!? no WSID given!?]")
 			return
 		end
 		return _oldAddWorkshop(wsid)
