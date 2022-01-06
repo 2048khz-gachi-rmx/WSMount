@@ -119,11 +119,17 @@ function WSMount.DrawMountingOverlay()
 	cam.End2D()
 end
 
+local preMcore, preQueue
+local preFixed = false
+
 local function doMount()
 	if table.IsEmpty(WSMount.MountQueue) then return end -- u w0t
 
-	local preMcore = GetConVar("gmod_mcore_test"):GetInt()
-	local preQueue = GetConVar("mat_queue_mode"):GetInt()
+	if not preFixed then
+		preMcore = GetConVar("gmod_mcore_test"):GetInt()
+		preQueue = GetConVar("mat_queue_mode"):GetInt()
+		preFixed = true
+	end
 
 	RunConsoleCommand("gmod_mcore_test", 0)
 	RunConsoleCommand("mat_queue_mode", 0)
@@ -174,6 +180,8 @@ local function doMount()
 				timer.Simple(0.25, function()
 					RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
 					RunConsoleCommand("mat_queue_mode", tostring(preQueue))
+
+					preFixed = false
 
 					hook.Remove("PreRender", "WSMount_AvoidCrashHack")
 					hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
