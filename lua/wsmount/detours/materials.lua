@@ -2,7 +2,7 @@ WSMount.PathToMissingMat = WSMount.PathToMissingMat or {}
 WSMount.MissingMatToPath = WSMount.MissingMatToPath or {}
 
 function WSMount.IsBadMaterial(ret)
-	if ret and ret:IsError() then
+	if ret and type(ret) == "IMaterial" and ret:IsError() then
 		return true
 	end
 
