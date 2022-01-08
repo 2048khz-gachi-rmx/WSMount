@@ -105,7 +105,7 @@ function st.LoadInitial(readRaw)
 	WSMount.ReadingData = false
 end
 
-if hook then
+if hook and not WSMount.PreBooting then
 	-- this file can run from preboot (ie no hook lib) or autorun
 	-- when ran from autorun, hook this stuff
 	-- otherwise the loading is initial; no hooks required

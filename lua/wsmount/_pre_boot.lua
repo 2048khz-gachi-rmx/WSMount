@@ -2,6 +2,8 @@
 WSMount = WSMount or {}
 WSMount.Hooks = WSMount.Hooks or {}
 
+WSMount.PreBooting = true
+
 local function addHook(ev, name, fn)
 	WSMount.Hooks[ev] = WSMount.Hooks[ev] or {}
 	WSMount.Hooks[ev][name] = fn
@@ -94,4 +96,4 @@ function WSMount.InitialMount()
 end
 
 WSMount.InitialMount()
-
+WSMount.PreBooting = nil
