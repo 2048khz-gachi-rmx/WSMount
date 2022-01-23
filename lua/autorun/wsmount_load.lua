@@ -56,7 +56,14 @@ local function recInc(sub, cl, sv, recurse)
 
 	for k,v in ipairs(files) do
 		local fn = path .. v
-		if not fn:match("%.lua$") or fn:match("/_.+%.lua$") then continue end -- ignore lua files starting with _
+
+		if not fn:match("%.lua$") or fn:match("/_.+%.lua$") then
+			-- don't include lua files starting with _, but share if needed
+			if should_share then
+				AddCSLuaFile(fn)
+			end
+			continue
+		end
 
 		if should_inc then
 			include(fn)

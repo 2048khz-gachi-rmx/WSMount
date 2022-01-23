@@ -2,6 +2,20 @@
 WSMount = WSMount or {}
 WSMount.Hooks = WSMount.Hooks or {}
 
+include("_sh_core.lua")
+
+if WSMount.Log then
+	WSMount.Log("Loaded core...")
+else
+	print("!!! WSMount failed to load core!? !!!")
+	
+	-- print("!!! Everything'll break if we proceed, disabling startup !!!")
+	-- return
+	
+	-- rather than silently die and leave the user in the dark as to
+	-- why half their content is missing, lets fail in a flurry of errors instead
+end
+
 WSMount.PreBooting = true
 
 local function addHook(ev, name, fn)
@@ -26,7 +40,7 @@ end
 --]==================================]
 if SERVER then
 	include("sh_storage.lua")
-	include("sh_core.lua")
+	include("_sh_core.lua")
 
 	local addons = WSMount.Storage.LoadInitial(true)
 	addons = addons and addons.Addons or {}
@@ -78,17 +92,40 @@ function WSMount.InitialMount()
 	include("sh_storage.lua")
 	local data = WSMount.Storage.LoadInitial(true)
 
-	if not data or not data.Paths then return end
+	if not data or not data.Paths or not data.Addons then
+		WSMount.Log("Missing %s, not mounting on startup.",
+			(not data and "all data") or
+			(not data.Paths and not data.Addons and "paths & addons") or
+			(not data.Paths and "paths") or
+			(not data.Addons and "addons") or "???"
+		)
+		return
+	end
 
-	for wsid, path in pairs(data.Paths) do
+	WSMount.Log("Aware of %s addons; mounting...", #data.Addons)
+
+	for _, wsid in ipairs(data.Addons) do
+		local path = data.Paths[wsid]
+		if not isstring(path) then
+			WSMount.LogError("	Aware of an addon, but missing the path, somehow? `%s` => `%s`", wsid, path)
+			WSMount.AssociatePath(wsid, nil)
+			continue
+		end
+
+		WSMount.LogContinuous("Mounting known addon `% -12s`... ", wsid)
+
 		local ok, contents = game.MountGMA(path)
 		wsid = tostring(wsid)
 		if not ok then
 			-- failed for some reason; remove path from associates so we redownload it
-			print("!! WSMount failed cached mount, removing path from cache...", wsid, path)
+			WSMount.LogErrorContinue("failed!\n")
+			WSMount.LogError("	Failed to mount at path `%s`; removing from cache...", path)
+
 			WSMount.AssociatePath(wsid, nil)
 		else
 			-- mounted ok; mark as such so we dont remount it again
+			WSMount.LogContinue("success!\n")
+
 			contents.Reloaded = true
 			WSMount.Mounted[wsid] = contents
 		end

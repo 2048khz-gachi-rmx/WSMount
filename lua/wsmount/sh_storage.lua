@@ -79,6 +79,20 @@ function st.LoadInitial(readRaw)
 	local datJson = fileRead(fn, "DATA")
 	local storedData = datJson and util.JSONToTable(datJson) or {}
 
+	if storedData.Paths then
+		-- workaround: JSON turns string keys that look like numbers into actual numbers
+		-- we need them as strings though
+
+		local rep = {}
+		for k,v in pairs(storedData.Paths) do
+			-- just doing `storedData[tostring(k)] = v` might cause shit to break,
+			-- what with creating keys during iteration and all
+			rep[tostring(k)] = v
+		end
+
+		storedData.Paths = rep
+	end
+
 	if readRaw then
 		WSMount.ReadingData = false
 		return storedData

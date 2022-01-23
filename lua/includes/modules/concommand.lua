@@ -1,7 +1,6 @@
 -- Get fucked stupid fucking game lmfao
 print("WSMount: PreBoot startup...")
 include("wsmount/_pre_boot.lua")
-AddCSLuaFile("wsmount/_pre_boot.lua")
 
 local AddConsoleCommand = AddConsoleCommand
 local string = string
