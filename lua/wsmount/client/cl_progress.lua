@@ -174,7 +174,9 @@ local function doMount()
 					end
 				end
 
-				WSMount.RefreshAll()
+				if amtMounted > 0 then
+					WSMount.RefreshAll()
+				end
 
 				-- after everything is mounted and refreshed, give it a little more time then restore everything
 				timer.Simple(0.25, function()
