@@ -127,4 +127,5 @@ if hook and not WSMount.PreBooting then
 
 	hook.Add("WSMount_AddedAddon", "StoreList", st.SyncAddons)
 	hook.Add("WSMount_RemovedAddon", "StoreList", st.SyncAddons)
+	hook.Add("WSMount_ListReceived", "StoreList", st.SyncAddons)
 end
