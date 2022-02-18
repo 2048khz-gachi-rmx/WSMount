@@ -48,6 +48,7 @@ if SERVER then
 	WSMount.CaughtPreBoot = WSMount.CaughtPreBoot or {}
 
 	_oldAddWorkshop = _oldAddWorkshop or resource.AddWorkshop
+	WSMount.RealAddWorkshop = WSMount.RealAddWorkshop or _oldAddWorkshop
 
 	function resource.AddWorkshop(wsid)
 		if WSMount.GetAddons then
