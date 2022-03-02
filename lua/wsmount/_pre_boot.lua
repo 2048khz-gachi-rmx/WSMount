@@ -1,27 +1,10 @@
--- setfenv(1, _G)
 WSMount = WSMount or {}
 WSMount.Hooks = WSMount.Hooks or {}
 
 include("_sh_core.lua")
-
-if WSMount.Log then
-	WSMount.Log("Loaded core...")
-else
-	print("!!! WSMount failed to load core!? !!!")
-	
-	-- print("!!! Everything'll break if we proceed, disabling startup !!!")
-	-- return
-	
-	-- rather than silently die and leave the user in the dark as to
-	-- why half their content is missing, lets fail in a flurry of errors instead
-end
+WSMount.Log("Loaded core...")
 
 WSMount.PreBooting = true
-
-local function addHook(ev, name, fn)
-	WSMount.Hooks[ev] = WSMount.Hooks[ev] or {}
-	WSMount.Hooks[ev][name] = fn
-end
 
 --[==================================[
 	override default behiavor
