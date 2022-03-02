@@ -90,3 +90,13 @@ recInc("", true, true, false) -- everything in root is shared
 recInc("server", false, true)
 recInc("client", true, false)
 recInc("detours", SERVER, false) -- basically only AddCSLua the stuff; it'll be included in preboot
+
+local files = {
+	"paper32.png",
+	"steam32.png",
+	"trash.png"
+}
+
+for k,v in ipairs(files) do
+	resource.AddSingleFile("materials/wsmount/" .. v) -- oh yea that as well huh
+end
