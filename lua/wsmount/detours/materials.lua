@@ -1,5 +1,5 @@
-WSMount.PathToMissingMat = WSMount.PathToMissingMat or {}
 WSMount.MissingMatToPath = WSMount.MissingMatToPath or {}
+WSMount.PathToMissingMat = WSMount.PathToMissingMat or {}
 
 function WSMount.IsBadMaterial(ret)
 	if ret and type(ret) == "IMaterial" and ret:IsError() then
@@ -28,11 +28,16 @@ function Material(path, flags, ...)
 end
 
 local IMat = FindMetaTable("IMaterial")
-local ignore = {}
-local is_bad = {}
+WSMount.IgnoreMaterials_Cache = setmetatable({}, {__mode = "k"})
+WSMount.BadMaterials_Cache = setmetatable({}, {__mode = "k"})
+
+local is_bad = WSMount.BadMaterials_Cache
+local ignore = WSMount.IgnoreMaterials_Cache
 
 -- override material parameter getters/setters for addons that
 -- change them dynamically (ie rendertargets (CW2 scopes) or SF2)
+
+IMat.__GetName = IMat.__GetName or IMat.GetName
 
 for k,v in pairs(IMat) do
 	if isfunction(v) and not k:match("^_") and k ~= "IsError" then
@@ -54,15 +59,18 @@ for k,v in pairs(IMat) do
 			IMat[k] = function(self, name, ...)
 				-- rather than check if a material is bad each time
 				-- we set something, do quick lookups instead
-				if not is_bad[self] then
-					-- not ignored but not bad; we dont know this mat
-					local tbl = WSMount.IsBadMaterial(self) and is_bad or ignore
-					tbl[self] = true
-				end
+
+				local cacheKey = IMat.__GetName(self)
 
 				-- this mat is valid; just do regular behavior
-				if ignore[self] then
+				if ignore[cacheKey] then
 					return orig_fn(self, name, ...)
+				end
+
+				-- not ignored but not bad; we dont know this mat
+				if not is_bad[cacheKey] then
+					local tbl = WSMount.IsBadMaterial(self) and is_bad or ignore
+					tbl[cacheKey] = true
 				end
 
 				-- material is bad!!! (= error mat)
