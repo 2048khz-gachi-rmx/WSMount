@@ -75,6 +75,7 @@ if SERVER then
 	function WSMount.AddWorkshop(wsid)
 		return WSMount.AddAddon(wsid)
 	end
+	WSMount.PreBooting = nil
 	return
 end
 
