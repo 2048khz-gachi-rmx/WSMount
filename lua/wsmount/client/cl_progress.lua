@@ -224,6 +224,11 @@ function WSMount.BeginMount()
 
 		WSMount.DLQueue[v] = true
 		steamworks.DownloadUGC(v, function(path, fobj)
+			if not path then
+				WSMount.Say("Failed to download addon \"%s\"!", v)
+				return
+			end
+
 			WSMount.GotAddons = WSMount.GotAddons + 1
 			awaitingMountSz = awaitingMountSz + fobj:Size()
 
