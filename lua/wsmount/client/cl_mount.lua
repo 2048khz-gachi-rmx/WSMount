@@ -88,9 +88,6 @@ function WSMount.RefreshAll()
 
 	WSMount.Log("Restarting sound...")
 	RunConsoleCommand("snd_restart") -- sounds
-
-	hook.Run("WSMount_MountedPack", wsid, cont)
-	-- ??
 end
 
 local screen = CreateMaterial("WSMount_Screen", "GMODScreenspace", {
@@ -122,6 +119,28 @@ end
 local preMcore, preQueue
 local preFixed = false
 
+local function preventRender()
+	WSMount.DrawMountingOverlay()
+	return true
+end
+
+local amtMounted = 0
+
+local function releaseRender()
+	timer.Create("WSM_ReleaseRender", 0.1, 1, function()
+		RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
+		RunConsoleCommand("mat_queue_mode", tostring(preQueue))
+
+		preFixed = false
+
+		hook.Remove("PreRender", "WSMount_AvoidCrashHack")
+		hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
+
+		WSMount.Say("Mounted %d addons!", amtMounted)
+		amtMounted = 0
+	end)
+end
+
 local function doMount()
 	if table.IsEmpty(WSMount.MountQueue) then return end -- u w0t
 
@@ -134,15 +153,23 @@ local function doMount()
 	RunConsoleCommand("gmod_mcore_test", 0)
 	RunConsoleCommand("mat_queue_mode", 0)
 
-	-- trip up anticheats 5head
 	local frames = 0
 	local refreshing = false
 
+	-- lock rendering -> mount -> refresh -> release
 	hook.Add("PreRender", "WSMount_AvoidCrashHack", function()
 		frames = frames + 1
-		if frames < 5 then -- first few frames, disallow rendering anything but don't mount
-			WSMount.DrawMountingOverlay()
-			return true
+		if frames < 3 then -- first few frames, disallow rendering anything but don't mount
+			return preventRender()
+		end
+
+		-- nothing to mount; dont care about refresh nor mount logic
+		if table.IsEmpty(WSMount.MountQueue) then
+			return preventRender()
+		end
+
+		if refreshing then
+			return preventRender()
 		end
 
 		-- after N frames are prevented, start mounting crap
@@ -157,44 +184,41 @@ local function doMount()
 
 			WSMount.Mounted[k] = contents
 			WSMount.MountQueue[k] = nil
+			amtMounted = amtMounted + 1
 		end
 
-		if not refreshing and table.IsEmpty(WSMount.DLQueue) and table.IsEmpty(WSMount.MountQueue) then
-			refreshing = true
+		refreshing = true
 
+		if table.IsEmpty(WSMount.DLQueue) then
+			-- nothing left to download & everything has been mounted (above)
+			-- refresh all content so errors stop being errors, etc.
 			timer.Simple(0, function()
 				-- do it outside of a rendering context, just in case lol
 				WSMount.Log("Queue empty; reloading all materials!")
-				local amtMounted = 0
+
+				local refreshed = 0
+
 				for wsid, cont in pairs(WSMount.Mounted) do
 					if not cont.Reloaded then
+						refreshed = refreshed + 1
 						WSMount.RefreshContent(wsid, cont)
 						cont.Reloaded = true
-						amtMounted = amtMounted + 1
 					end
 				end
 
-				if amtMounted > 0 then
+				if refreshed > 0 then
 					WSMount.RefreshAll()
 				end
 
-				-- after everything is mounted and refreshed, give it a little more time then restore everything
-				timer.Simple(0.25, function()
-					RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
-					RunConsoleCommand("mat_queue_mode", tostring(preQueue))
-
-					preFixed = false
-
-					hook.Remove("PreRender", "WSMount_AvoidCrashHack")
-					hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
-
-					WSMount.Say("Mounted %d addons!", amtMounted)
-				end)
+				releaseRender()
 			end)
+		else
+			-- we're still downloading something, just release rendering from being hostage for now
+			-- we'll refresh content once the queue is empty
+			releaseRender()
 		end
 
-		WSMount.DrawMountingOverlay()
-		return true
+		return preventRender()
 	end)
 end
 
@@ -206,7 +230,7 @@ local function reqMount()
 		render.UpdateScreenEffectTexture()
 	end)
 
-	timer.Create("mount_delay", 1.5, 1, doMount)
+	timer.Create("mount_delay", 3, 1, doMount)
 end
 
 WSMount.GotAddons = WSMount.GotAddons or 0
@@ -226,6 +250,7 @@ function WSMount.BeginMount()
 		steamworks.DownloadUGC(v, function(path, fobj)
 			if not path then
 				WSMount.Say("Failed to download addon \"%s\"!", v)
+				ErrorNoHalt("Failed to download addon \"" .. v .. "\"!")
 				return
 			end
 
