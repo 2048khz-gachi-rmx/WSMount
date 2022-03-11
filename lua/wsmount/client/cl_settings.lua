@@ -314,6 +314,8 @@ local function createAddon(scr, wsid, insta, canDel)
 	sz:SetY(startY + nm:GetTall() + 2)
 
 	steamworks.FileInfo(wsid, function(info)
+		if not IsValid(nm) then return end
+
 		nm:SetText(info.title)
 		sz:SetText(string.NiceSize(info.size))
 
