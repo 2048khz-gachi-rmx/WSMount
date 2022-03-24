@@ -40,7 +40,7 @@ local ignore = WSMount.IgnoreMaterials_Cache
 IMat.__GetName = IMat.__GetName or IMat.GetName
 
 for k,v in pairs(IMat) do
-	if isfunction(v) and not k:match("^_") and k ~= "IsError" then
+	if isfunction(v) and not k:match("^_") --[[and k ~= "IsError"]] then
 		local key = "IMaterial." .. k
 		local orig_fn = _WSMountOverrides[key] or v
 		_WSMountOverrides[key] = orig_fn
