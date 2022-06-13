@@ -131,7 +131,11 @@ local function releaseRender()
 		RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
 		RunConsoleCommand("mat_queue_mode", tostring(preQueue))
 
-		preFixed = false
+		-- i realize the concommand delay is intentional but still,
+		-- a giant fuck you goes to valve for this
+		hook.Add("Think", "WSMount_thxvalve", function()
+			preFixed = false
+		end)
 
 		hook.Remove("PreRender", "WSMount_AvoidCrashHack")
 		hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
