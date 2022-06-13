@@ -131,7 +131,11 @@ local function releaseRender()
 		RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
 		RunConsoleCommand("mat_queue_mode", tostring(preQueue))
 
-		preFixed = false
+		-- i realize the concommand delay is intentional but still,
+		-- a giant fuck you goes to valve for this
+		hook.Add("Think", "WSMount_thxvalve", function()
+			preFixed = false
+		end)
 
 		hook.Remove("PreRender", "WSMount_AvoidCrashHack")
 		hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
@@ -238,12 +242,17 @@ WSMount.GotAddons = WSMount.GotAddons or 0
 -- going above 50 megs of addons awaiting mount will request mount
 local MountSizeCap = 50 * 1024 * 1024
 
-function WSMount.BeginMount()
+function WSMount.BeginMount(remount)
 	WSMount.Say("Beginning download of %d addons...", #WSMount.GetAddons())
 
 	local awaitingMountSz = 0
+	WSMount.GotAddons = 0
 
 	for k,v in ipairs(WSMount.GetAddons()) do
+		if remount and WSMount.Mounted[v] then
+			WSMount.Mounted[v] = nil
+		end
+
 		if WSMount.Mounted[v] or WSMount.DLQueue[v] then continue end
 
 		WSMount.DLQueue[v] = true
