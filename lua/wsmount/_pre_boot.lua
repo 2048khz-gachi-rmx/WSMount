@@ -39,19 +39,26 @@ if SERVER then
 		end
 
 		wsid = tostring(wsid)
-		WSMount.CaughtPreBoot[wsid] = true
 
-		if WSMount.CatchAddon then
-			WSMount.CatchAddon(wsid)
+		if tonumber(wsid) then
+			WSMount.CaughtPreBoot[wsid] = true
+
+			if WSMount.CatchAddon then
+				WSMount.CatchAddon(wsid)
+			end
+
+			-- do not add workshop addons that
+			-- are supposed to be mounted live
+			if table.HasValue(addons, wsid) then
+				-- also tell the admins about it
+				WSMount.Log("Preventing resource.AddWorkshop: %s (will be mounted live)", wsid or "[wtf!? no WSID given!?]")
+				return
+			end
+		else
+			WSMount.LogError("Some addon attempted to add a Workshop item with an invalid non-number ID: \"%s\"", wsid)
+			WSMount.LogError("%s", debug.traceback("", 2))
 		end
 
-		-- do not add workshop addons that
-		-- are supposed to be mounted live
-		if table.HasValue(addons, wsid) then
-			-- also tell the admins about it
-			WSMount.Log("Preventing resource.AddWorkshop: %s (will be mounted live)", wsid or "[wtf!? no WSID given!?]")
-			return
-		end
 		return _oldAddWorkshop(wsid)
 	end
 
