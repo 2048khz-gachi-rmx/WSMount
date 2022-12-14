@@ -316,12 +316,28 @@ local function createAddon(scr, wsid, insta, canDel)
 	steamworks.FileInfo(wsid, function(info)
 		if not IsValid(nm) then return end
 
+		if not info then
+			WSMount.LogError("Failed to get workshop information about addon [%s]: steamworks.FileInfo gave us nothing!",
+				wsid)
+
+			nm:SetText("[failed to get info]")
+			sz:SetText("maybe the addon is deleted or private?")
+			return
+		end
+
 		nm:SetText(info.title)
 		sz:SetText(string.NiceSize(info.size))
 
 		nm:SizeToContents()
 		sz:SizeToContents()
 		steamworks.Download(info.previewid, true, function(path)
+			if not isstring(path) then
+				-- Bro the wiki didn't warn me about this
+				WSMount.LogError("Failed to download a preview image for `%s` [%s]: steamworks.Download gave us no path! (%s)",
+					info.title, wsid, path)
+				return
+			end
+
 			local icMat = AddonMaterial(path)
 			icon:SetMaterial(icMat)
 		end)
