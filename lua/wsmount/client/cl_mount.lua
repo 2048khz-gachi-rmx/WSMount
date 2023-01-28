@@ -253,7 +253,15 @@ function WSMount.BeginMount(remount)
 			WSMount.Mounted[v] = nil
 		end
 
-		if WSMount.Mounted[v] or WSMount.DLQueue[v] then continue end
+		local mounted = WSMount.Mounted[v]
+		if mounted then
+			-- This addon was already mounted; just increment the counter and ignore it
+			WSMount.GotAddons = WSMount.GotAddons + 1
+			continue
+		end
+
+		local in_queue = WSMount.DLQueue[v]
+		if in_queue then continue end -- The addon is already downloading; the UGC callback will increment the counter already
 
 		WSMount.DLQueue[v] = true
 		steamworks.DownloadUGC(v, function(path, fobj)
