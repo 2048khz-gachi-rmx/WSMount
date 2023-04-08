@@ -10,6 +10,13 @@ WSMount.Mounted = WSMount.Mounted or {}
 -- [IMaterial_Old] = IMaterial_New
 WSMount.SwapMaterials = WSMount.SwapMaterials or {}
 
+--[==================================[
+	tries to match the filepath of the file from the mounted GMA
+	to the filepath used in Lua (in a `Material()` call, for example)
+
+	this way we know if a file from the GMA fixes a missing IMaterial
+--]==================================]
+
 local function matchAll(path, tbl)
 	if tbl[path] then return tbl[path], path end
 
@@ -33,14 +40,17 @@ local function tryFindMat(path)
 	return mat, foundPath or texPath, texIDs
 end
 
+function WSMount.IsMaterialPath(fn)
+	return fn:match("%.vtf$")
+		or fn:match("%.png$")
+		or fn:match("%.jpg$")
+		or fn:match("%.vmt$")
+		-- or fn:match("^materials/")
+end
+
 function WSMount.RefreshContent(wsid, cont)
 	for _, fn in ipairs(cont) do
-		if not fn:match("%.vtf$") and
-			not fn:match("%.png$") and
-			not fn:match("%.jpg$") and
-			not fn:match("%.vmt$") then
-			continue
-		end
+		if not WSMount.IsMaterialPath(fn) then continue end
 
 		local missingMats, usePath, missingIDs = tryFindMat(fn)
 
@@ -72,23 +82,39 @@ function WSMount.RefreshContent(wsid, cont)
 				WSMount.SwapMaterials[errMat] = useMat
 			end
 		end
-
-		--RunConsoleCommand("mat_reloadmaterial", fn)
-		--RunConsoleCommand("mat_reloadtexture", fn)
 	end
 
 	hook.Run("WSMount_MountContent", wsid, cont)
 end
 
-function WSMount.RefreshAll()
+-- reload engine assets (models, sounds)
+-- used to also reload materials but i don't remember why i removed it
+-- TODO: try again?
+
+function WSMount.ReloadEngine()
 	-- after everything has been mounted
+
+	WSMount.Log("Reloading ALL mounted materials...")
+
+	for wsid, cont in pairs(WSMount.Mounted) do
+		for _, fn in ipairs(cont) do
+			if not WSMount.IsMaterialPath(fn) then continue end
+
+			-- RunConsoleCommand("mat_reloadmaterial", fn)
+			-- RunConsoleCommand("mat_reloadtexture", fn)
+		end
+	end
 
 	WSMount.Log("Reloading models...")
 	RunConsoleCommand("r_flushlod") -- reload all models
 
 	WSMount.Log("Restarting sound...")
 	RunConsoleCommand("snd_restart") -- sounds
+
+	hook.Run("WSMount_ReloadEngine")
 end
+
+WSMount.RefreshAll = WSMount.ReloadEngine -- backwards compat
 
 local screen = CreateMaterial("WSMount_Screen", "GMODScreenspace", {
 	["$basetexture"] = "_rt_FullFrameFB",
@@ -119,33 +145,68 @@ end
 local preMcore, preQueue
 local preFixed = false
 
+WSMount.RenderLocked = false
+WSMount.MountAllowed = true
+
 local function preventRender()
 	WSMount.DrawMountingOverlay()
+	WSMount.Log("Preventing render...")
 	return true
 end
 
 local amtMounted = 0
 
-local function releaseRender()
-	timer.Create("WSM_ReleaseRender", 0.1, 1, function()
-		RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
-		RunConsoleCommand("mat_queue_mode", tostring(preQueue))
+function WSMount.LockRender()
+	if WSMount.RenderLocked then return end
+	WSMount.RenderLocked = true
+	WSMount.MountAllowed = false -- lock mounting for first N frames
 
-		-- i realize the concommand delay is intentional but still,
-		-- a giant fuck you goes to valve for this
-		hook.Add("Think", "WSMount_thxvalve", function()
-			preFixed = false
-		end)
+	local frames = 0
 
-		hook.Remove("PreRender", "WSMount_AvoidCrashHack")
-		hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
+	hook.Add("PreRender", "WSMount_AvoidCrashHack", function()
+		frames = frames + 1
+		if frames < 3 then -- first few frames, disallow rendering anything but don't mount
+			return preventRender()
+		end
 
-		WSMount.Say("Mounted %d addons!", amtMounted)
-		amtMounted = 0
+		-- frames passed; allow mounting from Think (`WSMount_MountLogic`)
+		WSMount.MountAllowed = true
+
+		return preventRender()
 	end)
 end
 
-local function doMount()
+
+function WSMount.ReleaseRender()
+	timer.Remove("WSM_ReleaseRender")
+
+	-- restore mcore convars, but wait before releasing render Just In Case™️
+	RunConsoleCommand("gmod_mcore_test", tostring(preMcore))
+	RunConsoleCommand("mat_queue_mode", tostring(preQueue))
+
+	hook.Add("Think", "WSMount_thxvalve", function()
+		timer.Create("WSM_ReleaseRender", 0.05, 1, function()
+			hook.Remove("PreRender", "WSMount_AvoidCrashHack")
+			hook.Remove("RenderScreenspaceEffects", "WSMount_Fill")
+			preFixed = false
+		end)
+
+		WSMount.Say("Mounted %d addons!", amtMounted)
+		amtMounted = 0
+
+		hook.Remove("Think", "WSMount_thxvalve")
+	end)
+
+	hook.Remove("Think", "WSMount_MountLogic")
+end
+
+function WSMount.PerformMount(force_remount, force_reload)
+	if force_remount then
+		for k,v in pairs(WSMount.Mounted) do
+			WSMount.MountQueue[k] = v.FilePath
+		end
+	end
+
 	if table.IsEmpty(WSMount.MountQueue) then return end -- u w0t
 
 	if not preFixed then
@@ -157,84 +218,75 @@ local function doMount()
 	RunConsoleCommand("gmod_mcore_test", 0)
 	RunConsoleCommand("mat_queue_mode", 0)
 
-	local frames = 0
-	local refreshing = false
+	WSMount.LockRender()
 
-	-- lock rendering -> mount -> refresh -> release
-	hook.Add("PreRender", "WSMount_AvoidCrashHack", function()
-		frames = frames + 1
-		if frames < 3 then -- first few frames, disallow rendering anything but don't mount
-			return preventRender()
-		end
+	-- this hook is removed in WSMount.ReleaseRender
+	hook.Add("Think", "WSMount_MountLogic", function()
+		if not WSMount.MountAllowed then return end -- not our time...
 
-		-- nothing to mount; dont care about refresh nor mount logic
-		if table.IsEmpty(WSMount.MountQueue) then
-			return preventRender()
-		end
+		local justMounted = {}
 
-		if refreshing then
-			return preventRender()
-		end
-
-		-- after N frames are prevented, start mounting crap
-
+		-- locked a few frames down; should be able to mount safely now
 		for k,v in pairs(WSMount.MountQueue) do
 			WSMount.Log("Mounting addon '%s' (@ %s)...", k, v)
-			local ok, contents = game.MountGMA(v)
+			local st1 = SysTime()
+			local ok, cont = game.MountGMA(v)
+			local st2 = SysTime()
+
+			WSMount.Log("Mounted addon '%s' in %.2fs.", k, st2 - st1)
 
 			if not ok then
 				WSMount.LogError("	Mount unsuccessful! No clue why.") -- gmod isn't very helpful
 			end
 
-			WSMount.Mounted[k] = contents
+			WSMount.Mounted[k] = cont
 			WSMount.MountQueue[k] = nil
 			amtMounted = amtMounted + 1
+
+			cont.FilePath = v
+			justMounted[k] = cont
 		end
 
-		refreshing = true
+		local refreshed = 0
 
-		if table.IsEmpty(WSMount.DLQueue) then
-			-- nothing left to download & everything has been mounted (above)
-			-- refresh all content so errors stop being errors, etc.
-			timer.Simple(0, function()
-				-- do it outside of a rendering context, just in case lol
-				WSMount.Log("Queue empty; reloading all materials!")
+		-- if forced to reload, reload ALL mounted items
+		-- instead of what we just mounted
+		for k, cont in pairs(force_reload and WSMount.Mounted or justMounted) do
+			refreshed = refreshed + 1
 
-				local refreshed = 0
+			local st1 = SysTime()
+			WSMount.RefreshContent(wsid, cont)
+			local st2 = SysTime()
 
-				for wsid, cont in pairs(WSMount.Mounted) do
-					if not cont.Reloaded then
-						refreshed = refreshed + 1
-						WSMount.RefreshContent(wsid, cont)
-						cont.Reloaded = true
-					end
-				end
+			cont.Reloaded = true -- this isn't used anymore xx
 
-				if refreshed > 0 then
-					WSMount.RefreshAll()
-				end
-
-				releaseRender()
-			end)
-		else
-			-- we're still downloading something, just release rendering from being hostage for now
-			-- we'll refresh content once the queue is empty
-			releaseRender()
+			WSMount.Log("Refreshed content for '%s' in %.2fs.", k, st2 - st1)
 		end
 
-		return preventRender()
+		if not table.IsEmpty(WSMount.DLQueue) then
+			-- we haven't downloaded everything; reloading now would be wasteful
+			-- release render and do it after the rest is downloaded and mounted
+			WSMount.ReleaseRender()
+			return
+		end
+
+		-- nothing left to download & everything has been mounted (above)
+		-- refresh all content so errors stop being errors, etc.
+
+		WSMount.Log("Queue empty; reloading all materials!")
+
+		WSMount.ReloadEngine()
+		WSMount.ReleaseRender()
 	end)
 end
 
 local function reqMount()
-	--if timer.Exists("WSMount_Delay") then return end
-
 	hook.Add("RenderScreenspaceEffects", "WSMount_Fill", function()
 		-- will only run when allowed to render (ie, not returning true from PrePrender)
 		render.UpdateScreenEffectTexture()
 	end)
 
-	timer.Create("mount_delay", 3, 1, doMount)
+	timer.Create("mount_delay", 3, 1, WSMount.PerformMount)
 end
 
 WSMount.GotAddons = WSMount.GotAddons or 0
@@ -242,14 +294,15 @@ WSMount.GotAddons = WSMount.GotAddons or 0
 -- going above 50 megs of addons awaiting mount will request mount
 local MountSizeCap = 50 * 1024 * 1024
 
-function WSMount.BeginMount(remount)
+function WSMount.BeginMount(redownload)
 	WSMount.Say("Beginning download of %d addons...", #WSMount.GetAddons())
 
 	local awaitingMountSz = 0
 	WSMount.GotAddons = 0
 
 	for k,v in ipairs(WSMount.GetAddons()) do
-		if remount and WSMount.Mounted[v] then
+		WSMount.Log("\tis %s (%s) mounted? %s", v, type(v), WSMount.Mounted[v])
+		if redownload and WSMount.Mounted[v] then
 			WSMount.Mounted[v] = nil
 		end
 
