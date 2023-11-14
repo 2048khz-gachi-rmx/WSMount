@@ -11,9 +11,9 @@ function WSMount.Net_SendList(ply)
 	if IsEntity(ply) and not IsValid(ply) then return end
 
 	-- cooldown logic
-	local sinceReq = CurTime() - (WSMount.Cooldowns[ply] or -999)
+	local sinceReq = CurTime() - (WSMount.Cooldowns[ply] or -math.huge)
 
-	if sinceReq < 2 then
+	if sinceReq < cdRate then
 		-- automatically send the list in X seconds, but not now
 		local id = ("WSM_RateLimit:%s"):format(ply:SteamID64())
 		timer.Create(id, cdRate - sinceReq, 1, function()
