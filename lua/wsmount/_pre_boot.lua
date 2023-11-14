@@ -32,6 +32,7 @@ if SERVER then
 
 	_oldAddWorkshop = _oldAddWorkshop or resource.AddWorkshop
 	WSMount.RealAddWorkshop = WSMount.RealAddWorkshop or _oldAddWorkshop
+	resource.OldAddWorkshop = resource.OldAddWorkshop or WSMount.RealAddWorkshop -- compat with https://www.gmodstore.com/market/view/4868 i believe
 
 	function resource.AddWorkshop(wsid)
 		if WSMount.GetAddons then
