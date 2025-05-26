@@ -1,5 +1,4 @@
 WSMount = WSMount or {}
-WSMount.Hooks = WSMount.Hooks or {}
 
 include("_sh_core.lua")
 WSMount.Log("Loaded core...")

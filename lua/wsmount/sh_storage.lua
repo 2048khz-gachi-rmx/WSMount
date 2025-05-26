@@ -15,10 +15,8 @@ WSMount.Storage = WSMount.Storage or {}
 WSMount.Storage.Data = WSMount.Storage.Data or {
 	Addons = {
 		-- [seq_idx] = "wsid",
-		-- ...
 	},
-	Paths = CLIENT and {} or nil, -- this is inefficient storage btw but idgaf
-	Settings = {}, -- NYI? might not even be implemented
+	Paths = CLIENT and {} or nil, -- ["wsid"] = "C:/.../addon.gma"
 }
 
 local st = WSMount.Storage
@@ -59,6 +57,7 @@ if CLIENT then
 	end
 end
 
+-- NOTE: this may run in preboot, before any of the gmod lua libs (like file.Read) are available
 function st.LoadInitial(readRaw)
 	if WSMount.ReadingData then return end
 
@@ -98,7 +97,7 @@ function st.LoadInitial(readRaw)
 		return storedData
 	end
 
-	-- json doesnt have circular references anyways
+	-- don't need to worry about infinite loops since json doesnt have circular references
 	local function merge(dest, src)
 		for k,v in pairs(src) do
 			if istable(v) then
